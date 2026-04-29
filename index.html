@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fit-Fede</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f4f6f9; --surface:#ffffff; --surface2:#f0f2f6; --border:#e2e6ed;
+    --accent:#2563eb; --accent-light:#eff6ff;
+    --accent2:#059669; --accent2-light:#ecfdf5;
+    --accent3:#d97706; --accent3-light:#fffbeb;
+    --danger:#dc2626; --danger-light:#fef2f2;
+    --purple:#7c3aed; --purple-light:#f5f3ff;
+    --text:#0f172a; --text2:#334155; --muted:#94a3b8;
+    --mono:'DM Mono',monospace; --sans:'DM Sans',sans-serif;
+    --shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;}
+  .app{display:grid;grid-template-columns:240px 1fr;grid-template-rows:64px 1fr;min-height:100vh;}
+  .topbar{grid-column:1/-1;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 28px;box-shadow:var(--shadow);}
+  .topbar-logo{font-weight:800;font-size:20px;letter-spacing:-0.5px;}
+  .topbar-logo span{color:var(--accent);}
+  .topbar-status{font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:8px;}
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--accent2);animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+  .sidebar{background:var(--surface);border-right:1px solid var(--border);padding:24px 12px;display:flex;flex-direction:column;gap:2px;}
+  .nav-section{font-family:var(--mono);font-size:10px;color:var(--muted);padding:16px 8px 6px;letter-spacing:1.5px;}
+  .nav-item{padding:10px 14px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text2);display:flex;align-items:center;gap:10px;border-radius:8px;transition:all 0.15s;}
+  .nav-item:hover{color:var(--accent);background:var(--accent-light);}
+  .nav-item.active{color:var(--accent);background:var(--accent-light);font-weight:700;}
+  .nav-icon{font-size:16px;}
+  .main{padding:32px;overflow-y:auto;}
+  .panel{display:none;}
+  .panel.active{display:block;animation:fadeIn 0.2s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+  .page-header{margin-bottom:28px;}
+  .page-title{font-size:28px;font-weight:800;letter-spacing:-0.5px;}
+  .page-sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:5px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;box-shadow:var(--shadow);margin-bottom:16px;}
+  .card-title{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:16px;}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:14px;margin-bottom:20px;}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:var(--shadow);}
+  .stat-card.blue{border-top:3px solid var(--accent);}
+  .stat-card.green{border-top:3px solid var(--accent2);}
+  .stat-card.amber{border-top:3px solid var(--accent3);}
+  .stat-card.red{border-top:3px solid var(--danger);}
+  .stat-label{font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;}
+  .stat-value{font-size:30px;font-weight:800;margin:8px 0 4px;letter-spacing:-1px;}
+  .stat-unit{font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;}
+  .form-group{display:flex;flex-direction:column;gap:6px;}
+  .form-label{font-family:var(--mono);font-size:11px;color:var(--text2);font-weight:500;}
+  .form-input{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 13px;color:var(--text);font-family:var(--mono);font-size:13px;transition:all 0.15s;width:100%;}
+  .form-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,0.1);}
+  .form-input::placeholder{color:var(--muted);}
+  textarea.form-input{resize:vertical;min-height:140px;line-height:1.6;}
+  .btn{padding:10px 22px;border-radius:9px;border:none;cursor:pointer;font-family:var(--sans);font-weight:700;font-size:13px;transition:all 0.15s;}
+  .btn-primary{background:var(--accent);color:white;}
+  .btn-primary:hover{background:#1d4ed8;transform:translateY(-1px);box-shadow:0 4px 12px rgba(37,99,235,0.3);}
+  .btn-outline{background:white;color:var(--text2);border:1px solid var(--border);}
+  .btn-outline:hover{background:var(--bg);}
+  .btn-sm{padding:7px 14px;font-size:12px;}
+  .table-wrap{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;}
+  th{background:var(--surface2);padding:10px 14px;text-align:left;color:var(--muted);font-size:10px;letter-spacing:0.5px;border-bottom:2px solid var(--border);white-space:nowrap;}
+  td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text2);}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:var(--accent-light);}
+  .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;}
+  .badge-red{background:var(--danger-light);color:var(--danger);}
+  .badge-green{background:var(--accent2-light);color:var(--accent2);}
+  .badge-blue{background:var(--accent-light);color:var(--accent);}
+  .badge-amber{background:var(--accent3-light);color:var(--accent3);}
+  .alert{padding:14px 18px;border-radius:10px;font-size:13px;margin-bottom:16px;}
+  .alert-error{background:var(--danger-light);color:var(--danger);border:1px solid #fecaca;}
+  .loading{text-align:center;padding:48px;color:var(--muted);font-family:var(--mono);font-size:13px;}
+  .spinner{display:inline-block;width:22px;height:22px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:12px;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:18px;}
+  .col-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .msg{font-family:var(--mono);font-size:12px;}
+  .msg-ok{color:var(--accent2);}
+  .msg-err{color:var(--danger);}
+  .tab-group{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
+  .tab{padding:9px 18px;border-radius:8px;border:1px solid var(--border);background:white;color:var(--text2);font-family:var(--sans);font-weight:600;font-size:12px;cursor:pointer;transition:all 0.15s;}
+  .tab.active{background:var(--accent);color:white;border-color:var(--accent);}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+  .paste-hint{font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.8;background:var(--surface2);padding:12px;border-radius:8px;}
+  .parsed-preview{background:var(--surface2);border-radius:10px;padding:16px;margin-top:14px;font-family:var(--mono);font-size:12px;line-height:2;border:1px solid var(--border);display:none;}
+  .parsed-preview.visible{display:block;}
+  .parsed-row{display:flex;gap:12px;}
+  .parsed-key{color:var(--muted);min-width:200px;}
+  .parsed-val{color:var(--text);font-weight:500;}
+  .tipo-group{display:flex;gap:10px;margin-bottom:16px;}
+  .tipo-btn{padding:12px 20px;border-radius:10px;border:2px solid var(--border);background:white;font-family:var(--sans);font-weight:600;font-size:13px;cursor:pointer;transition:all 0.15s;text-align:left;}
+  .tipo-btn small{display:block;font-weight:400;font-size:11px;opacity:0.6;margin-top:2px;}
+  .tipo-btn.proyecto.selected{border-color:var(--accent);background:var(--accent-light);color:var(--accent);}
+  .tipo-btn.espontaneo.selected{border-color:var(--accent3);background:var(--accent3-light);color:var(--accent3);}
+  @media(max-width:768px){.app{grid-template-columns:1fr;}.sidebar{display:none;}.col-2{grid-template-columns:1fr;}.main{padding:20px;}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="topbar-logo">FIT<span>·</span>FEDE</div>
+    <div class="topbar-status"><div class="status-dot"></div><span id="conn-status">Conectando...</span></div>
+  </div>
+
+  <div class="sidebar">
+    <div class="nav-section">Principal</div>
+    <div class="nav-item active" onclick="showPanel('dashboard',this)"><span class="nav-icon">📊</span>Dashboard</div>
+    <div class="nav-item" onclick="showPanel('entrada',this)"><span class="nav-icon">✏️</span>Registrar</div>
+    <div class="nav-section">Datos</div>
+    <div class="nav-item" onclick="showPanel('bascula',this)"><span class="nav-icon">⚖️</span>Báscula</div>
+    <div class="nav-item" onclick="showPanel('journal',this)"><span class="nav-icon">📓</span>Journal</div>
+    <div class="nav-item" onclick="showPanel('estudios',this)"><span class="nav-icon">🧪</span>Estudios</div>
+    <div class="nav-item" onclick="showPanel('hitos',this)"><span class="nav-icon">🏆</span>Hitos</div>
+    <div class="nav-item" onclick="showPanel('eventos',this)"><span class="nav-icon">📌</span>Eventos</div>
+    <div class="nav-section">Análisis</div>
+    <div class="nav-item" onclick="showPanel('comparativas',this)"><span class="nav-icon">📈</span>Comparativas</div>
+  </div>
+
+  <div class="main">
+
+    <!-- DASHBOARD -->
+    <div class="panel active" id="panel-dashboard">
+      <div class="page-header"><div class="page-title">Dashboard</div><div class="page-sub">PROYECTO FITNESS · FEDERICO RAMOS · INICIO 27/04/2026</div></div>
+      <div id="dashboard-content"><div class="loading"><div class="spinner"></div><br>Cargando datos...</div></div>
+    </div>
+
+    <!-- REGISTRAR -->
+    <div class="panel" id="panel-entrada">
+      <div class="page-header"><div class="page-title">Registrar</div><div class="page-sub">ENTRADA RÁPIDA DE DATOS</div></div>
+      <div class="tab-group">
+        <div class="tab active" onclick="showTab('tab-peso',this)">⚖️ Peso diario</div>
+        <div class="tab" onclick="showTab('tab-composicion',this)">📐 Composición corporal</div>
+        <div class="tab" onclick="showTab('tab-journal',this)">📋 Journal</div>
+      </div>
+
+      <div class="tab-panel active" id="tab-peso">
+        <div class="card">
+          <div class="card-title">Peso diario</div>
+          <p style="font-size:13px;color:var(--text2);margin-bottom:18px">Registro rápido. Solo fecha y peso de la báscula.</p>
+          <div class="form-grid" style="max-width:420px">
+            <div class="form-group"><label class="form-label">FECHA</label><input type="date" class="form-input" id="pd-fecha"></div>
+            <div class="form-group"><label class="form-label">PESO (kg)</label><input type="number" step="0.1" class="form-input" id="pd-peso" placeholder="88.5"></div>
+          </div>
+          <div class="row"><button class="btn btn-primary" onclick="guardarPesoDiario()">Guardar peso</button><span class="msg" id="pd-msg"></span></div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-composicion">
+        <div class="card">
+          <div class="card-title">Composición corporal — Lunes</div>
+          <p style="font-size:13px;color:var(--text2);margin-bottom:18px">Registro completo semanal con todos los indicadores.</p>
+          <div class="form-grid">
+            <div class="form-group"><label class="form-label">FECHA</label><input type="date" class="form-input" id="cc-fecha"></div>
+            <div class="form-group"><label class="form-label">PESO (kg)</label><input type="number" step="0.1" class="form-input" id="cc-peso" placeholder="88.5"></div>
+            <div class="form-group"><label class="form-label">% GRASA</label><input type="number" step="0.1" class="form-input" id="cc-grasa" placeholder="31.9"></div>
+            <div class="form-group"><label class="form-label">% MÚSCULO</label><input type="number" step="0.1" class="form-input" id="cc-musculo" placeholder="33.0"></div>
+            <div class="form-group"><label class="form-label">METABOLISMO BASAL (kcal)</label><input type="number" class="form-input" id="cc-metabolismo" placeholder="1911"></div>
+            <div class="form-group"><label class="form-label">EDAD CORPORAL</label><input type="number" class="form-input" id="cc-edad" placeholder="56"></div>
+            <div class="form-group"><label class="form-label">GRASA VISCERAL</label><input type="number" class="form-input" id="cc-visceral" placeholder="14"></div>
+            <div class="form-group"><label class="form-label">NOTA</label><input type="text" class="form-input" id="cc-nota" placeholder="Opcional..."></div>
+          </div>
+          <div class="row"><button class="btn btn-primary" onclick="guardarComposicion()">Guardar composición</button><span class="msg" id="cc-msg"></span></div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-journal">
+        <div class="card">
+          <div class="card-title">Journal — Pegar desde Claude</div>
+          <div class="paste-hint">
+            1. Comparte tu día en el chat con el formato estándar<br>
+            2. Claude te devuelve el resumen estructurado<br>
+            3. Copia y pega aquí → se parsea automáticamente → un clic guarda en Sheets
+          </div>
+          <div class="form-group">
+            <label class="form-label">PEGAR RESUMEN AQUÍ</label>
+            <textarea class="form-input" id="jt-paste" placeholder="FECHA: 27/04/2026&#10;DESAYUNO: Huevos revueltos + brócoli...&#10;CALORÍAS TOTALES: 1381&#10;PROTEÍNA (g): 95&#10;..." oninput="parsearJournal()"></textarea>
+          </div>
+          <div class="parsed-preview" id="jt-preview"></div>
+          <div class="row">
+            <button class="btn btn-primary" onclick="guardarJournalParsed()" id="jt-btn" style="display:none">Guardar en Sheets</button>
+            <button class="btn btn-outline btn-sm" onclick="limpiarJournal()">Limpiar</button>
+            <span class="msg" id="jt-msg"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BÁSCULA -->
+    <div class="panel" id="panel-bascula">
+      <div class="page-header"><div class="page-title">Báscula</div><div class="page-sub">HISTORIAL DE PESO Y MÉTRICAS</div></div>
+      <div class="card"><div class="card-title">Historial</div><div id="bascula-tabla"><div class="loading"><div class="spinner"></div></div></div></div>
+    </div>
+
+    <!-- JOURNAL -->
+    <div class="panel" id="panel-journal">
+      <div class="page-header"><div class="page-title">Journal</div><div class="page-sub">HISTORIAL DE ALIMENTACIÓN Y ACTIVIDAD</div></div>
+      <div class="card"><div class="card-title">Últimos 10 días</div><div id="journal-tabla"><div class="loading"><div class="spinner"></div></div></div></div>
+    </div>
+
+    <!-- ESTUDIOS -->
+    <div class="panel" id="panel-estudios">
+      <div class="page-header"><div class="page-title">Estudios</div><div class="page-sub">MARCADORES DE LABORATORIO</div></div>
+      <div id="estudios-content"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- HITOS -->
+    <div class="panel" id="panel-hitos">
+      <div class="page-header"><div class="page-title">Hitos</div><div class="page-sub">METAS Y LOGROS</div></div>
+      <div class="card">
+        <div class="card-title">Nuevo hito</div>
+        <div class="form-grid">
+          <div class="form-group" style="grid-column:1/-1"><label class="form-label">DESCRIPCIÓN</label><input type="text" class="form-input" id="h-hito" placeholder="Bajar a 85 kg..."></div>
+          <div class="form-group"><label class="form-label">FECHA ESPERADA</label><input type="date" class="form-input" id="h-fecha-esp"></div>
+          <div class="form-group"><label class="form-label">VALOR ASOCIADO</label><input type="number" step="0.1" class="form-input" id="h-valor" placeholder="85.0"></div>
+        </div>
+        <div class="row"><button class="btn btn-primary" onclick="guardarHito()">Agregar hito</button><span class="msg" id="h-msg"></span></div>
+      </div>
+      <div class="card"><div class="card-title">Mis hitos</div><div id="hitos-tabla"><div class="loading"><div class="spinner"></div></div></div></div>
+    </div>
+
+    <!-- EVENTOS -->
+    <div class="panel" id="panel-eventos">
+      <div class="page-header"><div class="page-title">Eventos</div><div class="page-sub">MARCADORES EN TU LÍNEA DE TIEMPO</div></div>
+      <div class="card">
+        <div class="card-title">Registrar evento</div>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:18px">Los eventos aparecerán como marcadores en tus gráficas para contextualizar cambios en tus números.</p>
+        <div class="form-group" style="margin-bottom:18px">
+          <label class="form-label">TIPO DE EVENTO</label>
+          <div class="tipo-group">
+            <button class="tipo-btn proyecto selected" id="tipo-proyecto" onclick="seleccionarTipo('proyecto')">📌 Proyecto<small>Cambio sostenido en el tiempo</small></button>
+            <button class="tipo-btn espontaneo" id="tipo-espontaneo" onclick="seleccionarTipo('espontaneo')">⚡ Espontáneo<small>Ocurrencia puntual</small></button>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">FECHA</label><input type="date" class="form-input" id="ev-fecha"></div>
+          <div class="form-group"><label class="form-label">DESCRIPCIÓN</label><input type="text" class="form-input" id="ev-desc" placeholder="Volví al crossfit..."></div>
+        </div>
+        <div class="row"><button class="btn btn-primary" onclick="guardarEvento()">Registrar evento</button><span class="msg" id="ev-msg"></span></div>
+      </div>
+      <div class="card"><div class="card-title">Historial de eventos</div><div id="eventos-tabla"><div class="loading"><div class="spinner"></div></div></div></div>
+    </div>
+
+    <!-- COMPARATIVAS -->
+    <div class="panel" id="panel-comparativas">
+      <div class="page-header"><div class="page-title">Comparativas</div><div class="page-sub">EVOLUCIÓN MENSUAL</div></div>
+      <div id="comparativas-content"><div class="loading"><div class="spinner"></div></div></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const SHEET_ID="1Z1c7qoxypflt4ewuzFmlBhBJvVsGz1xeJaplusgto2U";
+const CREDS={
+  client_email:"claude-fitness@deep-responder-494816-r1.iam.gserviceaccount.com",
+  private_key:"-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDmONFzWts806Rf\nXzK22BbCG3hkgq1HZlCbfi5JY+89hN+otwfGG4UdHHXhz+uQ2oJLcKgVPrCnoFXJ\nPaV5jb57l8Ma5OgFVByz47krBm0oVb8uSAxyfRjgGJk8K763HHNA7tXDM1fld0kw\nu/VXeI1ZGCAxKMFnZa0WKEeTqrAJ9HWyvXjs1xngEqx8wkc8QLe8MSAjISenSS11\n4Gr3sYYNZqOdqYaSQ41xRxfNbegU486669kFQkPkdWFbtCfl3QuIpwEiSKxnQRMx\nEsouKEADYVokhQoAKnODJX0JGuT0jZS2qbmDAQxmWvv4JX+UWdO/t/NolfRMJrtw\nuE+4c7pvAgMBAAECggEADt6yoJnIuVgOMN7MPsUcSzNNBmjuWkNAh5qR0Mm0pSuU\n6qfPx7r1URkKgChW1cdXTRocsSqYbGtNvy7NJlnCaOc3geAxIE77f58A0cebe1R2\ngb3DmA1+ctMD6sAElH0w8Iu8oNwLHFYlExHA2gJ+VrfZNHOmclA96sV1QhNvRWU2\nZCWCs7uINQr5rS/8oy0QWRB1ty4x59o2I+skGUK1SytX+fMSYgV6UdDs0I3JQ7Ig\n0ceoBACljfECPkEMgnQpyEghuEJAKgcG2QiDAadRx4esOROFOnooy95/F/G+2JgQ\nF3ygTxt+gjyjQmOShQNp8cixMHq2RvkVIkvU9O4ZmQKBgQD+GNJkhih3wM4M3cJJ\nHstoXKf/hUqUzW2dIAEpRK6dFZCoko4VwJdW3iG2WuoUKuEeycmTirEzW/h0hHG7\ni5sFTnNTSPwJ6jIIgBKcZ9HsJSBfPObV6fs65hPYndY2kDNzJJVN9kq23F9VxXzE\nm1vHulQP8SVePrCrjAVclfVJXQKBgQDn8jiPZaPPv2aRdadndN2pefnPS+Wgk5N5\ntYevQnmX4CaWgzZFwO3PcYGCf9gVYbtLAtMt+UltBxfbSVy+wKpkyWrGE5nmJUt3\nTgnK0vUN2D0+1flieQqOL+PNhFDKEe1aBekhey+NvRPPYZl+4iLR1Hxxo1op8Dqb\nRTkDLPP6OwKBgC+FsuusD6t9+st7Ohf003QcSCtI4Y788LA/SRhPyRyF6P0uE7bL\nw0Iy3zk8vaSx9FKOyM14VfXWEJyyHJdH3+FZL8Z20vSDwYHHejOYUzGILArD2CRP\n03XLjBCqTGL+CzFQuT/QfV6/znC7M7+NktfC6G/m2OdMcDxVPrd3MF3dAoGBALGT\n2ce3ek3wbNeKqyri5138W8xggCKLOcpht8rvauZjH0f2lxOaXLeIYC4IMOhV1a3d\nMM8u3w9Q8evaY95K5WmaZ1vU3+u6u+dQYODe1+zMlD9KVM8WeoVXluHennfGd+CH\nS/BtPoAWtVb9kyX4fc4GD2x1Mu+O01/TBI4w2W3HAoGBAOTwC0VauaCJxncmF3eY\nn/IfZB0uvKHqgLuY4lmGdxaNrT/hebo0yz9lU5Ma9WkcDQ0zbZxeLfvM/ym74K/r\nvMh8X3LB4luKcIfv8HjjxvyNe7FTy/d42+l1ydDZxFWFchRqlVvqz3NbRxck44SO\ns+4lzDpJN1xP/abhygCasnbC\n-----END PRIVATE KEY-----\n",
+  token_uri:"https://oauth2.googleapis.com/token"
+};
+
+let _token=null,_tokenExp=0;
+function b64u(s){return btoa(s).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');}
+
+async function getToken(){
+  if(_token&&Date.now()<_tokenExp)return _token;
+  const now=Math.floor(Date.now()/1000);
+  const hdr=b64u(JSON.stringify({alg:"RS256",typ:"JWT"}));
+  const pay=b64u(JSON.stringify({iss:CREDS.client_email,scope:"https://www.googleapis.com/auth/spreadsheets",aud:CREDS.token_uri,iat:now,exp:now+3600}));
+  const msg=`${hdr}.${pay}`;
+  const kStr=CREDS.private_key.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\n/g,'');
+  const kData=Uint8Array.from(atob(kStr),c=>c.charCodeAt(0));
+  const ck=await crypto.subtle.importKey("pkcs8",kData.buffer,{name:"RSASSA-PKCS1-v1_5",hash:"SHA-256"},false,["sign"]);
+  const sig=await crypto.subtle.sign("RSASSA-PKCS1-v1_5",ck,new TextEncoder().encode(msg));
+  const jwt=`${msg}.${btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_')}`;
+  const res=await fetch(CREDS.token_uri,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`});
+  const d=await res.json();
+  _token=d.access_token;_tokenExp=(now+3500)*1000;
+  return _token;
+}
+
+async function readSheet(range){
+  const t=await getToken();
+  const r=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}`,{headers:{Authorization:`Bearer ${t}`}});
+  const d=await r.json();return d.values||[];
+}
+
+async function appendRow(sheet,values){
+  const t=await getToken();
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(sheet+'!A1')}:append?valueInputOption=USER_ENTERED`,{
+    method:"POST",headers:{Authorization:`Bearer ${t}`,"Content-Type":"application/json"},
+    body:JSON.stringify({values:[values]})
+  });
+}
+
+function showPanel(name,el){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  if(el)el.classList.add('active');
+  ({dashboard:loadDashboard,bascula:loadBascula,journal:loadJournal,estudios:loadEstudios,hitos:loadHitos,eventos:loadEventos,comparativas:loadComparativas})[name]?.();
+}
+
+function showTab(id,el){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');el.classList.add('active');
+}
+
+async function loadDashboard(){
+  const el=document.getElementById('dashboard-content');
+  try{
+    const[bRows,jRows,evRows]=await Promise.all([readSheet("BÁSCULA!A2:I"),readSheet("JOURNAL!A2:U"),readSheet("EVENTOS!A2:D").catch(()=>[])]);
+    document.getElementById('conn-status').textContent='Conectado · Fit-Fede';
+    const last=bRows.length?bRows[bRows.length-1]:null;
+    const diff=last?(parseFloat(last[1]||0)-parseFloat(bRows[0][1]||0)).toFixed(1):'0';
+    const jLast=jRows.length?jRows[jRows.length-1]:null;
+    el.innerHTML=`
+      <div class="stats-grid">
+        <div class="stat-card blue"><div class="stat-label">Peso actual</div><div class="stat-value">${last?last[1]:'—'}</div><div class="stat-unit">kg · IMC ${last&&last[2]?parseFloat(last[2]).toFixed(1):'—'}</div></div>
+        <div class="stat-card green"><div class="stat-label">Cambio total</div><div class="stat-value" style="color:${parseFloat(diff)<=0?'var(--accent2)':'var(--danger)'}">${parseFloat(diff)>0?'+':''}${diff}</div><div class="stat-unit">kg desde el inicio</div></div>
+        <div class="stat-card amber"><div class="stat-label">% Grasa</div><div class="stat-value">${last&&last[3]?last[3]:'—'}</div><div class="stat-unit">% corporal</div></div>
+        <div class="stat-card red"><div class="stat-label">Días registrados</div><div class="stat-value">${bRows.length}</div><div class="stat-unit">desde 27/04/2026</div></div>
+      </div>
+      <div class="col-2">
+        <div class="card"><div class="card-title">Último · Báscula</div>${last?`<table><tbody>
+          <tr><td style="color:var(--muted)">Fecha</td><td>${last[0]||'—'}</td></tr>
+          <tr><td style="color:var(--muted)">Peso</td><td><strong>${last[1]||'—'} kg</strong></td></tr>
+          <tr><td style="color:var(--muted)">IMC</td><td>${last[2]?parseFloat(last[2]).toFixed(1):'—'}</td></tr>
+          <tr><td style="color:var(--muted)">% Grasa</td><td>${last[3]||'—'}%</td></tr>
+          <tr><td style="color:var(--muted)">% Músculo</td><td>${last[4]||'—'}%</td></tr>
+          <tr><td style="color:var(--muted)">Metabolismo</td><td>${last[5]||'—'} kcal</td></tr>
+        </tbody></table>`:'<p style="color:var(--muted);font-size:13px">Sin datos</p>'}</div>
+        <div class="card"><div class="card-title">Último · Journal</div>${jLast?`<table><tbody>
+          <tr><td style="color:var(--muted)">Fecha</td><td>${jLast[0]||'—'}</td></tr>
+          <tr><td style="color:var(--muted)">Calorías</td><td>${jLast[5]||'—'} kcal</td></tr>
+          <tr><td style="color:var(--muted)">Proteína</td><td>${jLast[6]||'—'} g</td></tr>
+          <tr><td style="color:var(--muted)">Actividad</td><td>${jLast[9]||'—'}</td></tr>
+          <tr><td style="color:var(--muted)">Pasos</td><td>${jLast[14]||'—'}</td></tr>
+          <tr><td style="color:var(--muted)">Balance</td><td style="color:${parseInt(jLast[18]||0)<0?'var(--accent2)':'var(--danger)'}"><strong>${jLast[18]||'—'} kcal</strong></td></tr>
+        </tbody></table>`:'<p style="color:var(--muted);font-size:13px">Sin datos</p>'}</div>
+      </div>
+      ${evRows.length?`<div class="card"><div class="card-title">Eventos recientes</div><table><thead><tr><th>FECHA</th><th>TIPO</th><th>DESCRIPCIÓN</th></tr></thead><tbody>
+        ${evRows.slice(-5).reverse().map(r=>`<tr><td>${r[0]||'—'}</td><td>${r[2]==='Proyecto'?'<span class="badge badge-blue">📌 Proyecto</span>':'<span class="badge badge-amber">⚡ Espontáneo</span>'}</td><td>${r[1]||'—'}</td></tr>`).join('')}
+      </tbody></table></div>`:''}`;
+  }catch(e){
+    document.getElementById('conn-status').textContent='Error de conexión';
+    el.innerHTML=`<div class="alert alert-error">⚠️ Error: ${e.message}</div>`;
+  }
+}
+
+async function guardarPesoDiario(){
+  const msg=document.getElementById('pd-msg');
+  const fecha=document.getElementById('pd-fecha').value,peso=document.getElementById('pd-peso').value;
+  if(!fecha||!peso){msg.className='msg msg-err';msg.textContent='Fecha y peso requeridos.';return;}
+  msg.className='msg';msg.textContent='Guardando...';
+  try{
+    await appendRow("BÁSCULA",[fecha,peso,(parseFloat(peso)/(1.70*1.70)).toFixed(2),'','','','','','']);
+    msg.className='msg msg-ok';msg.textContent='✓ Guardado';_token=null;
+  }catch(e){msg.className='msg msg-err';msg.textContent='Error: '+e.message;}
+}
+
+async function guardarComposicion(){
+  const msg=document.getElementById('cc-msg');
+  const fecha=document.getElementById('cc-fecha').value,peso=document.getElementById('cc-peso').value;
+  if(!fecha||!peso){msg.className='msg msg-err';msg.textContent='Fecha y peso requeridos.';return;}
+  msg.className='msg';msg.textContent='Guardando...';
+  try{
+    await appendRow("BÁSCULA",[fecha,peso,(parseFloat(peso)/(1.70*1.70)).toFixed(2),
+      document.getElementById('cc-grasa').value,document.getElementById('cc-musculo').value,
+      document.getElementById('cc-metabolismo').value,document.getElementById('cc-edad').value,
+      document.getElementById('cc-visceral').value,document.getElementById('cc-nota').value]);
+    msg.className='msg msg-ok';msg.textContent='✓ Composición guardada';_token=null;
+  }catch(e){msg.className='msg msg-err';msg.textContent='Error: '+e.message;}
+}
+
+// JOURNAL PARSER
+let parsedJournal=null;
+const JKEYS={'FECHA':'fecha','DESAYUNO':'desayuno','COMIDA':'comida','CENA':'cena','SNACKS':'snacks',
+  'CALORÍAS TOTALES':'calorias','PROTEÍNA (G)':'proteina','CARBOS (G)':'carbos','GRASA (G)':'grasa',
+  'ACTIVIDAD':'actividad','DURACIÓN':'duracion','FC PROMEDIO':'fcprom','FC MÍNIMA':'fcmin',
+  'FC MÁXIMA':'fcmax','CALORÍAS QUEMADAS':'calquemadas','PASOS':'pasos','KM DÍA':'km',
+  'CAL ACTIVAS':'calactivas','CAL TOTALES':'caltotales','BALANCE':'balance','SUEÑO (H)':'sueno','NOTA':'nota'};
+const JLABELS={fecha:'Fecha',desayuno:'Desayuno',comida:'Comida',cena:'Cena',snacks:'Snacks',
+  calorias:'Calorías totales',proteina:'Proteína (g)',carbos:'Carbos (g)',grasa:'Grasa (g)',
+  actividad:'Actividad',duracion:'Duración',fcprom:'FC Promedio',fcmin:'FC Mínima',fcmax:'FC Máxima',
+  calquemadas:'Cal. quemadas',pasos:'Pasos',km:'KM día',calactivas:'Cal. activas',
+  caltotales:'Cal. totales',balance:'Balance',sueno:'Sueño (h)',nota:'Nota'};
+
+function parsearJournal(){
+  const text=document.getElementById('jt-paste').value.trim();
+  const preview=document.getElementById('jt-preview'),btn=document.getElementById('jt-btn');
+  if(!text){preview.classList.remove('visible');btn.style.display='none';parsedJournal=null;return;}
+  const data={};
+  for(const line of text.split('\n')){
+    const ci=line.indexOf(':');if(ci===-1)continue;
+    const key=line.substring(0,ci).trim().toUpperCase();
+    const val=line.substring(ci+1).trim();
+    for(const[k,field]of Object.entries(JKEYS)){if(key===k){data[field]=val==='—'?'':val;break;}}
+  }
+  if(!data.fecha){preview.classList.remove('visible');btn.style.display='none';parsedJournal=null;return;}
+  if(!data.balance&&data.calorias&&data.caltotales)data.balance=String(parseInt(data.calorias)-parseInt(data.caltotales));
+  parsedJournal=data;
+  preview.innerHTML=Object.entries(JLABELS).map(([f,l])=>data[f]?`<div class="parsed-row"><span class="parsed-key">${l}</span><span class="parsed-val">${data[f]}</span></div>`:'').filter(Boolean).join('');
+  preview.classList.add('visible');btn.style.display='inline-block';
+}
+
+async function guardarJournalParsed(){
+  const msg=document.getElementById('jt-msg');
+  if(!parsedJournal){msg.className='msg msg-err';msg.textContent='Nada que guardar.';return;}
+  msg.className='msg';msg.textContent='Guardando...';
+  try{
+    const d=parsedJournal;
+    await appendRow("JOURNAL",[d.fecha,d.desayuno,d.comida,d.cena,d.snacks,d.calorias,d.proteina,d.carbos,d.grasa,d.actividad,d.duracion,d.fcprom,d.fcmax,d.calquemadas,d.pasos,d.km,d.calactivas,d.caltotales,d.balance,d.sueno,d.nota]);
+    msg.className='msg msg-ok';msg.textContent=`✓ Journal del ${d.fecha} guardado`;
+    limpiarJournal();_token=null;
+  }catch(e){msg.className='msg msg-err';msg.textContent='Error: '+e.message;}
+}
+
+function limpiarJournal(){
+  document.getElementById('jt-paste').value='';
+  document.getElementById('jt-preview').classList.remove('visible');
+  document.getElementById('jt-btn').style.display='none';
+  parsedJournal=null;
+}
+
+async function loadBascula(){
+  const el=document.getElementById('bascula-tabla');
+  const rows=await readSheet("BÁSCULA!A2:I");
+  if(!rows.length){el.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px">Sin registros.</p>';return;}
+  el.innerHTML=`<div class="table-wrap"><table><tr><th>FECHA</th><th>PESO</th><th>IMC</th><th>% GRASA</th><th>% MÚSCULO</th><th>MET. BASAL</th><th>EDAD CORP.</th><th>GRASA VISC.</th><th>NOTA</th></tr>
+    ${[...rows].reverse().slice(0,30).map(r=>`<tr><td>${r[0]||'—'}</td><td><strong>${r[1]||'—'} kg</strong></td><td>${r[2]?parseFloat(r[2]).toFixed(1):'—'}</td><td>${r[3]?r[3]+'%':'—'}</td><td>${r[4]?r[4]+'%':'—'}</td><td>${r[5]?r[5]+' kcal':'—'}</td><td>${r[6]||'—'}</td><td>${r[7]||'—'}</td><td>${r[8]||'—'}</td></tr>`).join('')}
+  </table></div>`;
+}
+
+async function loadJournal(){
+  const el=document.getElementById('journal-tabla');
+  const rows=await readSheet("JOURNAL!A2:U");
+  if(!rows.length){el.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px">Sin registros.</p>';return;}
+  el.innerHTML=`<div class="table-wrap"><table><tr><th>FECHA</th><th>CALORÍAS</th><th>PROTEÍNA</th><th>CARBOS</th><th>GRASA</th><th>ACTIVIDAD</th><th>PASOS</th><th>BALANCE</th><th>SUEÑO</th></tr>
+    ${[...rows].reverse().slice(0,10).map(r=>`<tr><td>${r[0]||'—'}</td><td>${r[5]?r[5]+' kcal':'—'}</td><td>${r[6]?r[6]+' g':'—'}</td><td>${r[7]?r[7]+' g':'—'}</td><td>${r[8]?r[8]+' g':'—'}</td><td>${r[9]||'—'}</td><td>${r[14]||'—'}</td><td style="color:${parseInt(r[18]||0)<0?'var(--accent2)':'var(--danger)'}"><strong>${r[18]?r[18]+' kcal':'—'}</strong></td><td>${r[19]?r[19]+' h':'—'}</td></tr>`).join('')}
+  </table></div>`;
+}
+
+async function loadEstudios(){
+  const el=document.getElementById('estudios-content');
+  const rows=await readSheet("ESTUDIOS!A2:H");
+  if(!rows.length){el.innerHTML='<div class="card"><p style="color:var(--muted);font-size:13px">Sin estudios.</p></div>';return;}
+  const cats={};
+  rows.forEach(r=>{const c=r[1]||'General';if(!cats[c])cats[c]=[];cats[c].push(r);});
+  el.innerHTML=Object.entries(cats).map(([cat,items])=>`<div class="card"><div class="card-title">${cat}</div><div class="table-wrap"><table>
+    <tr><th>MARCADOR</th><th>VALOR</th><th>UNIDAD</th><th>REFERENCIA</th><th>FECHA</th><th>ESTADO</th></tr>
+    ${items.map(r=>`<tr><td>${r[0]||'—'}</td><td style="font-weight:700;color:${(r[7]==='TRUE')?'var(--danger)':'var(--text)'}">${r[2]||'—'}</td><td style="color:var(--muted)">${r[3]||'—'}</td><td style="color:var(--muted)">${r[4]||'—'} – ${r[5]||'—'}</td><td>${r[6]||'—'}</td><td>${r[7]==='TRUE'?'<span class="badge badge-red">⚠ Alerta</span>':'<span class="badge badge-green">✓ OK</span>'}</td></tr>`).join('')}
+  </table></div></div>`).join('');
+}
+
+async function loadHitos(){
+  const el=document.getElementById('hitos-tabla');
+  const rows=await readSheet("HITOS!A2:F");
+  if(!rows.length){el.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px">Sin hitos.</p>';return;}
+  el.innerHTML=`<div class="table-wrap"><table><tr><th>ID</th><th>HITO</th><th>FECHA ESPERADA</th><th>FECHA REAL</th><th>VALOR</th><th>ESTADO</th></tr>
+    ${rows.map(r=>`<tr><td>${r[0]||'—'}</td><td>${r[1]||'—'}</td><td>${r[2]||'—'}</td><td>${r[3]||'—'}</td><td>${r[4]||'—'}</td><td>${r[5]==='TRUE'?'<span class="badge badge-green">✓ Completado</span>':'<span class="badge" style="background:var(--surface2);color:var(--muted)">Pendiente</span>'}</td></tr>`).join('')}
+  </table></div>`;
+}
+
+async function guardarHito(){
+  const msg=document.getElementById('h-msg');
+  const hito=document.getElementById('h-hito').value;
+  if(!hito){msg.className='msg msg-err';msg.textContent='La descripción es obligatoria.';return;}
+  const rows=await readSheet("HITOS!A2:A");
+  msg.className='msg';msg.textContent='Guardando...';
+  try{
+    await appendRow("HITOS",[rows.length+1,hito,document.getElementById('h-fecha-esp').value,'',document.getElementById('h-valor').value,false]);
+    msg.className='msg msg-ok';msg.textContent='✓ Hito agregado';loadHitos();_token=null;
+  }catch(e){msg.className='msg msg-err';msg.textContent='Error: '+e.message;}
+}
+
+let tipoEvento='Proyecto';
+function seleccionarTipo(tipo){
+  tipoEvento=tipo==='proyecto'?'Proyecto':'Espontáneo';
+  document.getElementById('tipo-proyecto').classList.toggle('selected',tipo==='proyecto');
+  document.getElementById('tipo-espontaneo').classList.toggle('selected',tipo==='espontaneo');
+}
+
+async function loadEventos(){
+  const el=document.getElementById('eventos-tabla');
+  document.getElementById('ev-fecha').value=new Date().toISOString().split('T')[0];
+  try{
+    const rows=await readSheet("EVENTOS!A2:D");
+    if(!rows.length){el.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px">Sin eventos registrados aún.</p>';return;}
+    el.innerHTML=`<div class="table-wrap"><table><tr><th>FECHA</th><th>DESCRIPCIÓN</th><th>TIPO</th></tr>
+      ${[...rows].reverse().map(r=>`<tr><td>${r[0]||'—'}</td><td>${r[1]||'—'}</td><td>${r[2]==='Proyecto'?'<span class="badge badge-blue">📌 Proyecto</span>':'<span class="badge badge-amber">⚡ Espontáneo</span>'}</td></tr>`).join('')}
+    </table></div>`;
+  }catch(e){el.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px">Agrega tu primer evento para crear la hoja.</p>';}
+}
+
+async function guardarEvento(){
+  const msg=document.getElementById('ev-msg');
+  const fecha=document.getElementById('ev-fecha').value,desc=document.getElementById('ev-desc').value;
+  if(!fecha||!desc){msg.className='msg msg-err';msg.textContent='Fecha y descripción requeridas.';return;}
+  msg.className='msg';msg.textContent='Guardando...';
+  try{
+    await appendRow("EVENTOS",[fecha,desc,tipoEvento]);
+    msg.className='msg msg-ok';msg.textContent=`✓ Evento "${tipoEvento}" registrado`;
+    document.getElementById('ev-desc').value='';loadEventos();_token=null;
+  }catch(e){msg.className='msg msg-err';msg.textContent='Error: '+e.message;}
+}
+
+async function loadComparativas(){
+  const el=document.getElementById('comparativas-content');
+  const rows=await readSheet("BÁSCULA!A2:E");
+  if(rows.length<2){el.innerHTML='<div class="card"><p style="color:var(--muted);font-size:13px">Se necesitan al menos 2 registros.</p></div>';return;}
+  const byMonth={};
+  rows.forEach(r=>{if(!r[0])return;const p=r[0].split('/');const key=p.length===3?`${p[1]}/${p[2]}`:r[0].substring(0,7);if(!byMonth[key])byMonth[key]=[];byMonth[key].push(r);});
+  el.innerHTML=`<div class="card"><div class="card-title">Comparativa mensual</div><div class="table-wrap"><table>
+    <tr><th>MES</th><th>PESO INICIO</th><th>PESO FIN</th><th>DIFERENCIA</th><th>GRASA INICIO</th><th>GRASA FIN</th><th>DIF. GRASA</th></tr>
+    ${Object.entries(byMonth).map(([mes,items])=>{
+      const ini=items[0],fin=items[items.length-1];
+      const dp=(parseFloat(fin[1]||0)-parseFloat(ini[1]||0)).toFixed(1);
+      const dg=(parseFloat(fin[3]||0)-parseFloat(ini[3]||0)).toFixed(1);
+      return `<tr><td><strong>${mes}</strong></td><td>${ini[1]||'—'} kg</td><td>${fin[1]||'—'} kg</td><td style="color:${parseFloat(dp)<=0?'var(--accent2)':'var(--danger)'};font-weight:700">${parseFloat(dp)>0?'+':''}${dp} kg</td><td>${ini[3]||'—'}%</td><td>${fin[3]||'—'}%</td><td style="color:${parseFloat(dg)<=0?'var(--accent2)':'var(--danger)'}">${parseFloat(dg)>0?'+':''}${dg}%</td></tr>`;
+    }).join('')}
+  </table></div></div>`;
+}
+
+window.addEventListener('load',()=>{
+  const today=new Date().toISOString().split('T')[0];
+  document.getElementById('pd-fecha').value=today;
+  document.getElementById('cc-fecha').value=today;
+  document.getElementById('ev-fecha').value=today;
+  loadDashboard();
+});
+</script>
+</body>
+</html>
