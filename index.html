@@ -112,13 +112,21 @@
   .legend-dot{width:10px;height:10px;border-radius:50%;}
   .legend-line{width:20px;height:2px;}
   .legend-dashed{width:20px;height:0;border-top:2px dashed;}
-  @media(max-width:768px){.app{grid-template-columns:1fr;}.sidebar{display:none;}.col-2{grid-template-columns:1fr;}.main{padding:20px;}}
+  @media(max-width:768px){.app{grid-template-columns:1fr;}.sidebar{position:fixed;left:-260px;top:0;height:100vh;width:240px;z-index:100;transition:left 0.3s ease;box-shadow:4px 0 20px rgba(0,0,0,0.15);}.sidebar.open{left:0;}.col-2{grid-template-columns:1fr;}.main{padding:20px;}}
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:99;}
+  .sidebar-overlay.visible{display:block;}
+  .mobile-menu-btn{display:none;background:none;border:none;cursor:pointer;font-size:22px;padding:4px;}
+  @media(max-width:768px){.mobile-menu-btn{display:block;}}
 </style>
 </head>
 <body>
 <div class="app">
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
   <div class="topbar">
-    <div class="topbar-logo">FIT<span>·</span>FEDE</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="mobile-menu-btn" onclick="openSidebar()">☰</button>
+      <div class="topbar-logo">FIT<span>·</span>FEDE</div>
+    </div>
     <div class="topbar-status"><div class="status-dot"></div><span id="conn-status">Conectando...</span></div>
   </div>
   <div class="sidebar">
@@ -338,6 +346,7 @@ function showPanel(name,el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('panel-'+name).classList.add('active');
   if(el)el.classList.add('active');
+  closeSidebar();
   ({dashboard:loadDashboard,bascula:loadBascula,journal:loadJournal,estudios:loadEstudios,hitos:loadHitos,eventos:loadEventos,graficas:loadGraficas,comparativas:loadComparativas})[name]?.();
 }
 function showTab(id,el){
@@ -361,91 +370,149 @@ function fmtDelta(val,unit='',inverse=false){
   return `<span class="${cls}">${sign}${val}${unit} vs anterior</span>`;
 }
 
-// DASHBOARD
+// DASHBOARD STATE
+let dashPeriod=7, dashMode='pct'; // pct or kg
+let _dashBRows=[], _dashJRows=[], _dashEvRows=[];
+
 async function loadDashboard(){
   const el=document.getElementById('dashboard-content');
   try{
-    const[bRows,jRows,evRows,hRows]=await Promise.all([
+    [_dashBRows,_dashJRows,_dashEvRows]=await Promise.all([
       readSheet("BÁSCULA!A2:I"),readSheet("JOURNAL!A2:U"),
-      readSheet("EVENTOS!A2:D").catch(()=>[]),readSheet("HITOS!A2:F").catch(()=>[])
+      readSheet("EVENTOS!A2:D").catch(()=>[])
     ]);
     document.getElementById('conn-status').textContent='Conectado · Fit-Fede';
-    const last=bRows.length?bRows[bRows.length-1]:null;
-    const startPeso=bRows.length?parseFloat(bRows[0][1]||0):90;
-    const curPeso=last?parseFloat(last[1]||0):0;
-    const diff=(curPeso-startPeso).toFixed(1);
-
-    // Delta peso 7 días
-    let deltaPeso7=null;
-    if(bRows.length>=2&&last){
-      const lastDate=parseDate(last[0]);
-      const prev=bRows.slice().reverse().find(r=>{const d=parseDate(r[0]);return d&&diffDays(d,lastDate)>=7;});
-      if(prev)deltaPeso7=(curPeso-parseFloat(prev[1]||0)).toFixed(1);
-    }
-
-    // Delta grasa — última comparación completa
-    let deltaGrasa=null,deltaGrasaLabel='vs medición anterior';
-    const grasaRows=bRows.filter(r=>r[3]&&r[3]!=='');
-    if(grasaRows.length>=2){
-      const g1=parseFloat(grasaRows[grasaRows.length-2][3]);
-      const g2=parseFloat(grasaRows[grasaRows.length-1][3]);
-      deltaGrasa=(g2-g1).toFixed(1);
-      deltaGrasaLabel=`vs ${grasaRows[grasaRows.length-2][0]}`;
-    }
-
-    const jLast=jRows.length?jRows[jRows.length-1]:null;
-
-    el.innerHTML=`
-      <div class="stats-grid">
-        <div class="stat-card blue">
-          <div class="stat-label">Peso actual</div>
-          <div class="stat-value">${last?last[1]:'—'}</div>
-          <div class="stat-unit">kg · IMC ${last&&last[2]?parseFloat(last[2]).toFixed(1):'—'}</div>
-          <div class="stat-delta">${deltaPeso7!==null?fmtDelta(parseFloat(deltaPeso7),' kg'):'<span class="delta-neutral">— 7 días aún no</span>'}</div>
-        </div>
-        <div class="stat-card green">
-          <div class="stat-label">Cambio total</div>
-          <div class="stat-value" style="color:${parseFloat(diff)<=0?'var(--accent2)':'var(--danger)'}">${parseFloat(diff)>0?'+':''}${diff}</div>
-          <div class="stat-unit">kg desde el inicio</div>
-        </div>
-        <div class="stat-card amber">
-          <div class="stat-label">% Grasa</div>
-          <div class="stat-value">${last&&last[3]?last[3]:'—'}</div>
-          <div class="stat-unit">% corporal</div>
-          <div class="stat-delta">${deltaGrasa!==null?fmtDelta(parseFloat(deltaGrasa),'%')+` <span style="color:var(--muted);font-size:10px">(${deltaGrasaLabel})</span>`:'<span class="delta-neutral">— sin medición previa</span>'}</div>
-        </div>
-        <div class="stat-card red">
-          <div class="stat-label">Días registrados</div>
-          <div class="stat-value">${bRows.length}</div>
-          <div class="stat-unit">desde 27/04/2026</div>
-        </div>
-      </div>
-      <div class="col-2">
-        <div class="card"><div class="card-title">Último · Báscula</div>${last?`<table><tbody>
-          <tr><td style="color:var(--muted)">Fecha</td><td>${last[0]||'—'}</td></tr>
-          <tr><td style="color:var(--muted)">Peso</td><td><strong>${last[1]||'—'} kg</strong></td></tr>
-          <tr><td style="color:var(--muted)">IMC</td><td>${last[2]?parseFloat(last[2]).toFixed(1):'—'}</td></tr>
-          <tr><td style="color:var(--muted)">% Grasa</td><td>${last[3]||'—'}${last[3]?'%':''}</td></tr>
-          <tr><td style="color:var(--muted)">% Músculo</td><td>${last[4]||'—'}${last[4]?'%':''}</td></tr>
-          <tr><td style="color:var(--muted)">Metabolismo</td><td>${last[5]||'—'}${last[5]?' kcal':''}</td></tr>
-        </tbody></table>`:'<p style="color:var(--muted);font-size:13px">Sin datos</p>'}</div>
-        <div class="card"><div class="card-title">Último · Journal</div>${jLast?`<table><tbody>
-          <tr><td style="color:var(--muted)">Fecha</td><td>${jLast[0]||'—'}</td></tr>
-          <tr><td style="color:var(--muted)">Calorías</td><td>${jLast[5]||'—'}${jLast[5]?' kcal':''}</td></tr>
-          <tr><td style="color:var(--muted)">Proteína</td><td>${jLast[6]||'—'}${jLast[6]?' g':''}</td></tr>
-          <tr><td style="color:var(--muted)">Actividad</td><td>${jLast[9]||'—'}</td></tr>
-          <tr><td style="color:var(--muted)">Pasos</td><td>${jLast[14]||'—'}</td></tr>
-          <tr><td style="color:var(--muted)">Balance</td><td style="color:${parseInt(jLast[18]||0)<0?'var(--accent2)':'var(--danger)'}"><strong>${jLast[18]||'—'}${jLast[18]?' kcal':''}</strong></td></tr>
-        </tbody></table>`:'<p style="color:var(--muted);font-size:13px">Sin datos</p>'}</div>
-      </div>
-      ${evRows.length?`<div class="card"><div class="card-title">Eventos recientes</div><table><thead><tr><th>FECHA</th><th>TIPO</th><th>DESCRIPCIÓN</th></tr></thead><tbody>
-        ${evRows.slice(-5).reverse().map(r=>`<tr><td>${r[0]||'—'}</td><td>${r[2]==='Proyecto'?'<span class="badge badge-blue">📌 Proyecto</span>':'<span class="badge badge-amber">⚡ Espontáneo</span>'}</td><td>${r[1]||'—'}</td></tr>`).join('')}
-      </tbody></table></div>`:''}`;
+    renderDashboard();
   }catch(e){
     document.getElementById('conn-status').textContent='Error de conexión';
     el.innerHTML=`<div class="alert alert-error">⚠️ Error: ${e.message}</div>`;
   }
 }
+
+function renderDashboard(){
+  const el=document.getElementById('dashboard-content');
+  const bRows=_dashBRows, jRows=_dashJRows, evRows=_dashEvRows;
+  const last=bRows.length?bRows[bRows.length-1]:null;
+  const curPeso=last?parseFloat(last[1]||0):0;
+  const startPeso=bRows.length?parseFloat(bRows[0][1]||0):curPeso;
+
+  // Cambio total — kg o %
+  const diffKg=(curPeso-startPeso);
+  const diffPct=startPeso>0?(diffKg/startPeso*100):0;
+  const diffDisplay=dashMode==='pct'?(diffPct.toFixed(1)+'%'):(diffKg.toFixed(1)+' kg');
+  const diffColor=diffKg<=0?'var(--accent2)':'var(--danger)';
+  const diffSign=diffKg>0?'+':'';
+  const diffUnit=dashMode==='pct'?'% del peso inicial':'kg desde el inicio';
+
+  const jLast=jRows.length?jRows[jRows.length-1]:null;
+
+  // Filter rows by period
+  const now=new Date();
+  const cutoff=new Date(now); cutoff.setDate(now.getDate()-dashPeriod);
+  const periodRows=dashPeriod===0?bRows:bRows.filter(r=>{const d=parseDate(r[0]);return d&&d>=cutoff;});
+
+  // Peso delta en periodo
+  let deltaPeso=null;
+  if(periodRows.length>=2){
+    const dp=parseFloat(periodRows[periodRows.length-1][1]||0)-parseFloat(periodRows[0][1]||0);
+    const pp=parseFloat(periodRows[0][1]||1);
+    deltaPeso=dashMode==='pct'?(dp/pp*100).toFixed(1)+'%':dp.toFixed(1)+' kg';
+  }
+
+  const periodLabel=dashPeriod===1?'ayer':dashPeriod===0?'inicio':dashPeriod+'d';
+
+  // Grasa delta — primero intenta con el período, si no hay dato usa el historial completo
+  const grasaPeriod=periodRows.filter(r=>r[3]&&r[3]!=='');
+  let deltaGrasa=null,grasaLabel='',grasaDeltaLabel='';
+  if(grasaPeriod.length>=2){
+    const g1=parseFloat(grasaPeriod[0][3]),g2=parseFloat(grasaPeriod[grasaPeriod.length-1][3]);
+    const p1=parseFloat(grasaPeriod[0][1]||curPeso),p2=parseFloat(grasaPeriod[grasaPeriod.length-1][1]||curPeso);
+    if(dashMode==='pct'){deltaGrasa=(g2-g1).toFixed(1);grasaLabel='%';}
+    else{deltaGrasa=((g2/100)*p2-(g1/100)*p1).toFixed(1);grasaLabel=' kg';}
+    grasaDeltaLabel=`vs ${periodLabel}`;
+  } else {
+    // Fallback: última comparativa disponible en todo el historial
+    const allGrasa=_dashBRows.filter(r=>r[3]&&r[3]!=='');
+    if(allGrasa.length>=2){
+      const g1=parseFloat(allGrasa[allGrasa.length-2][3]),g2=parseFloat(allGrasa[allGrasa.length-1][3]);
+      const p1=parseFloat(allGrasa[allGrasa.length-2][1]||curPeso),p2=parseFloat(allGrasa[allGrasa.length-1][1]||curPeso);
+      if(dashMode==='pct'){deltaGrasa=(g2-g1).toFixed(1);grasaLabel='%';}
+      else{deltaGrasa=((g2/100)*p2-(g1/100)*p1).toFixed(1);grasaLabel=' kg';}
+      grasaDeltaLabel=`vs ${allGrasa[allGrasa.length-2][0]}`;
+    }
+  } 
+  const curGrasaPct=last&&last[3]?parseFloat(last[3]):null;
+  const curGrasaKg=curGrasaPct&&curPeso?(curGrasaPct/100*curPeso).toFixed(1):null;
+  const grasaDisplay=dashMode==='pct'?(curGrasaPct?curGrasaPct:'—'):(curGrasaKg||'—');
+  const grasaUnit=dashMode==='pct'?'% corporal':'kg de grasa';
+
+  // Músculo display
+  const curMusculoPct=last&&last[4]?parseFloat(last[4]):null;
+  const curMusculoKg=curMusculoPct&&curPeso?(curMusculoPct/100*curPeso).toFixed(1):null;
+
+  el.innerHTML=`
+    <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
+      <div style="display:flex;gap:4px;background:var(--surface2);padding:4px;border-radius:8px">
+        <button class="btn btn-sm" onclick="setDashPeriod(1)" style="${dashPeriod===1?'background:var(--accent);color:white':'background:transparent;color:var(--text2)'};border:none">1d</button>
+        <button class="btn btn-sm" onclick="setDashPeriod(7)" style="${dashPeriod===7?'background:var(--accent);color:white':'background:transparent;color:var(--text2)'};border:none">7d</button>
+        <button class="btn btn-sm" onclick="setDashPeriod(60)" style="${dashPeriod===60?'background:var(--accent);color:white':'background:transparent;color:var(--text2)'};border:none">60d</button>
+        <button class="btn btn-sm" onclick="setDashPeriod(90)" style="${dashPeriod===90?'background:var(--accent);color:white':'background:transparent;color:var(--text2)'};border:none">90d</button>
+        <button class="btn btn-sm" onclick="setDashPeriod(0)" style="${dashPeriod===0?'background:var(--accent);color:white':'background:transparent;color:var(--text2)'};border:none">Todo</button>
+      </div>
+      <div style="display:flex;gap:4px;background:var(--surface2);padding:4px;border-radius:8px">
+        <button class="btn btn-sm" onclick="setDashMode('pct')" style="${dashMode==='pct'?'background:var(--accent);color:white':'background:transparent;color:var(--text2)'};border:none">%</button>
+        <button class="btn btn-sm" onclick="setDashMode('kg')" style="${dashMode==='kg'?'background:var(--accent);color:white':'background:transparent;color:var(--text2)'};border:none">kg</button>
+      </div>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card blue">
+        <div class="stat-label">Peso actual</div>
+        <div class="stat-value">${last?last[1]:'—'}</div>
+        <div class="stat-unit">kg · IMC ${last&&last[2]?parseFloat(last[2]).toFixed(1):'—'}</div>
+        <div class="stat-delta">${deltaPeso!==null?`<span class="${parseFloat(deltaPeso)<=0?'delta-down':'delta-up'}">${parseFloat(deltaPeso)>0?'+':''}${deltaPeso} vs ${periodLabel}</span>`:'<span class="delta-neutral">— sin dato</span>'}</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-label">Cambio total</div>
+        <div class="stat-value" style="color:${diffColor}">${diffSign}${diffDisplay}</div>
+        <div class="stat-unit">${diffUnit}</div>
+      </div>
+      <div class="stat-card amber">
+        <div class="stat-label">Grasa corporal</div>
+        <div class="stat-value">${grasaDisplay}</div>
+        <div class="stat-unit">${grasaUnit}</div>
+        <div class="stat-delta">${deltaGrasa!==null?`<span class="${parseFloat(deltaGrasa)<=0?'delta-down':'delta-up'}">${parseFloat(deltaGrasa)>0?'+':''}${deltaGrasa}${grasaLabel} ${grasaDeltaLabel}</span>`:'<span class="delta-neutral">— sin mediciones</span>'}</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">Días registrados</div>
+        <div class="stat-value">${bRows.length}</div>
+        <div class="stat-unit">desde 27/04/2026</div>
+      </div>
+    </div>
+    <div class="col-2">
+      <div class="card"><div class="card-title">Último · Báscula</div>${last?`<table><tbody>
+        <tr><td style="color:var(--muted)">Fecha</td><td>${last[0]||'—'}</td></tr>
+        <tr><td style="color:var(--muted)">Peso</td><td><strong>${last[1]||'—'} kg</strong></td></tr>
+        <tr><td style="color:var(--muted)">IMC</td><td>${last[2]?parseFloat(last[2]).toFixed(1):'—'}</td></tr>
+        <tr><td style="color:var(--muted)">Grasa</td><td>${dashMode==='pct'?(curGrasaPct?curGrasaPct+'%':'—'):(curGrasaKg?curGrasaKg+' kg':'—')}</td></tr>
+        <tr><td style="color:var(--muted)">Músculo</td><td>${dashMode==='pct'?(curMusculoPct?curMusculoPct+'%':'—'):(curMusculoKg?curMusculoKg+' kg':'—')}</td></tr>
+        <tr><td style="color:var(--muted)">Metabolismo</td><td>${last[5]||'—'}${last[5]?' kcal':''}</td></tr>
+      </tbody></table>`:'<p style="color:var(--muted);font-size:13px">Sin datos</p>'}</div>
+      <div class="card"><div class="card-title">Último · Journal</div>${jLast?`<table><tbody>
+        <tr><td style="color:var(--muted)">Fecha</td><td>${jLast[0]||'—'}</td></tr>
+        <tr><td style="color:var(--muted)">Calorías</td><td>${jLast[5]||'—'}${jLast[5]?' kcal':''}</td></tr>
+        <tr><td style="color:var(--muted)">Proteína</td><td>${jLast[6]||'—'}${jLast[6]?' g':''}</td></tr>
+        <tr><td style="color:var(--muted)">Actividad</td><td>${jLast[9]||'—'}</td></tr>
+        <tr><td style="color:var(--muted)">Pasos</td><td>${jLast[14]||'—'}</td></tr>
+        <tr><td style="color:var(--muted)">Balance</td><td style="color:${parseInt(jLast[18]||0)<0?'var(--accent2)':'var(--danger)'}"><strong>${jLast[18]||'—'}${jLast[18]?' kcal':''}</strong></td></tr>
+      </tbody></table>`:'<p style="color:var(--muted);font-size:13px">Sin datos</p>'}</div>
+    </div>
+    ${evRows.length?`<div class="card"><div class="card-title">Eventos recientes</div><table><thead><tr><th>FECHA</th><th>TIPO</th><th>DESCRIPCIÓN</th></tr></thead><tbody>
+      ${evRows.slice(-5).reverse().map(r=>`<tr><td>${r[0]||'—'}</td><td>${r[2]==='Proyecto'?'<span class="badge badge-blue">📌 Proyecto</span>':'<span class="badge badge-amber">⚡ Espontáneo</span>'}</td><td>${r[1]||'—'}</td></tr>`).join('')}
+    </tbody></table></div>`:''}`;
+}
+
+function setDashPeriod(p){dashPeriod=p;renderDashboard();}
+function setDashMode(m){dashMode=m;renderDashboard();}
 
 // REGISTRAR
 async function guardarPesoDiario(){
@@ -545,14 +612,53 @@ async function guardarEstudiosParsed(){
 function limpiarEstudios(){document.getElementById('et-paste').value='';document.getElementById('et-preview').classList.remove('visible');document.getElementById('et-btn').style.display='none';parsedEstudios=null;}
 
 // HISTORIAL BÁSCULA
+let basculaMode='pct';
 async function loadBascula(){
   const el=document.getElementById('bascula-tabla');
   const rows=await readSheet("BÁSCULA!A2:I");
   if(!rows.length){el.innerHTML='<p style="color:var(--muted);font-size:13px;padding:8px">Sin registros.</p>';return;}
-  el.innerHTML=`<div class="table-wrap"><table><tr><th>FECHA</th><th>PESO</th><th>IMC</th><th>% GRASA</th><th>% MÚSCULO</th><th>MET. BASAL</th><th>EDAD CORP.</th><th>GRASA VISC.</th><th>NOTA</th></tr>
-    ${[...rows].reverse().slice(0,30).map(r=>`<tr><td>${r[0]||'—'}</td><td><strong>${r[1]||'—'} kg</strong></td><td>${r[2]?parseFloat(r[2]).toFixed(1):'—'}</td><td>${r[3]?r[3]+'%':'—'}</td><td>${r[4]?r[4]+'%':'—'}</td><td>${r[5]?r[5]+' kcal':'—'}</td><td>${r[6]||'—'}</td><td>${r[7]||'—'}</td><td>${r[8]||'—'}</td></tr>`).join('')}
+  const modeBtn=`<div style="display:flex;gap:4px;background:var(--surface2);padding:4px;border-radius:8px;margin-bottom:14px;width:fit-content">
+    <button class="btn btn-sm" onclick="setBasculaMode('pct')" style="${basculaMode==='pct'?'background:var(--accent);color:white':'background:transparent;color:var(--text2)'};border:none">%</button>
+    <button class="btn btn-sm" onclick="setBasculaMode('kg')" style="${basculaMode==='kg'?'background:var(--accent);color:white':'background:transparent;color:var(--text2)'};border:none">kg</button>
+  </div>`;
+  const gH=basculaMode==='pct'?'% GRASA':'GRASA (kg)';
+  const mH=basculaMode==='pct'?'% MÚSCULO':'MÚSCULO (kg)';
+  const rev=[...rows].reverse().slice(0,30);
+
+  function fmtComp(row,col){
+    const pct=row[col]?parseFloat(row[col]):null;
+    if(pct===null)return'—';
+    if(basculaMode==='pct')return pct+'%';
+    return(pct/100*parseFloat(row[1]||0)).toFixed(1)+' kg';
+  }
+  function fmtDelta(curr,prev,col){
+    const c=curr[col]?parseFloat(curr[col]):null;
+    const p=prev&&prev[col]?parseFloat(prev[col]):null;
+    if(c===null||p===null)return'';
+    let d;
+    if(basculaMode==='pct'){d=(c-p).toFixed(1);return` <span style="font-size:10px;color:${parseFloat(d)<=0?'var(--accent2)':'var(--danger)'}">(${parseFloat(d)>0?'+':''}${d}%)</span>`;}
+    const ck=(c/100)*parseFloat(curr[1]||0),pk=(p/100)*parseFloat(prev[1]||0);
+    d=(ck-pk).toFixed(1);
+    return` <span style="font-size:10px;color:${parseFloat(d)<=0?'var(--accent2)':'var(--danger)'}">(${parseFloat(d)>0?'+':''}${d}kg)</span>`;
+  }
+
+  // Build prev map for composition rows (only lunes with full data)
+  const compRows=rows.filter(r=>r[3]&&r[3]!=='');
+
+  el.innerHTML=modeBtn+`<div class="table-wrap"><table><tr><th>FECHA</th><th>PESO</th><th>IMC</th><th>${gH}</th><th>${mH}</th><th>MET. BASAL</th><th>EDAD CORP.</th><th>GRASA VISC.</th><th>NOTA</th></tr>
+    ${rev.map(r=>{
+      const peso=parseFloat(r[1]||0);
+      const gDisp=fmtComp(r,3);
+      const mDisp=fmtComp(r,4);
+      const rIdx=compRows.findIndex(cr=>cr===r||cr[0]===r[0]);
+      const prev=rIdx>0?compRows[rIdx-1]:null;
+      const gDelta=fmtDelta(r,prev,3);
+      const mDelta=fmtDelta(r,prev,4);
+      return `<tr><td>${r[0]||'—'}</td><td><strong>${r[1]||'—'} kg</strong></td><td>${r[2]?parseFloat(r[2]).toFixed(1):'—'}</td><td>${gDisp}${gDelta}</td><td>${mDisp}${mDelta}</td><td>${r[5]?r[5]+' kcal':'—'}</td><td>${r[6]||'—'}</td><td>${r[7]||'—'}</td><td>${r[8]||'—'}</td></tr>`;
+    }).join('')}
   </table></div>`;
 }
+function setBasculaMode(m){basculaMode=m;loadBascula();}
 
 // HISTORIAL JOURNAL
 async function loadJournal(){
@@ -631,7 +737,7 @@ async function guardarEvento(){
 // GRÁFICAS
 let chart1=null,chart1candle=null;
 let _bRows=[],_jRows=[],_evRows=[],_hRows=[];
-let vistaG1='detalle';
+let vistaG1='detalle', grafMode='pct', grafRango=7;
 
 async function loadGraficas(){
   const el=document.getElementById('graficas-content');
@@ -644,25 +750,30 @@ async function loadGraficas(){
 
     el.innerHTML=`
       <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">
           <div class="card-title" style="margin-bottom:0">Composición corporal</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <div style="display:flex;gap:4px;background:var(--surface2);padding:4px;border-radius:8px;margin-right:8px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <div style="display:flex;gap:4px;background:var(--surface2);padding:4px;border-radius:8px">
               <button class="btn btn-sm" id="btn-detalle" onclick="switchVista('detalle')" style="background:var(--accent);color:white;border:none">Detalle</button>
               <button class="btn btn-sm" id="btn-candle" onclick="switchVista('candle')" style="background:transparent;color:var(--text2);border:none">Histórico</button>
             </div>
-            <div id="range-btns" style="display:flex;gap:4px">
-              <button class="btn btn-sm range-btn active" onclick="setRango(7,this)">7d</button>
-              <button class="btn btn-sm range-btn" onclick="setRango(30,this)">30d</button>
-              <button class="btn btn-sm range-btn" onclick="setRango(90,this)">90d</button>
-              <button class="btn btn-sm range-btn" onclick="setRango(0,this)">Todo</button>
+            <div id="range-btns" style="display:flex;gap:4px;background:var(--surface2);padding:4px;border-radius:8px">
+              <button class="btn btn-sm range-btn" onclick="setGrafRango(7,this)" style="background:var(--accent);color:white;border:none">7d</button>
+              <button class="btn btn-sm range-btn" onclick="setGrafRango(30,this)" style="background:transparent;color:var(--text2);border:none">30d</button>
+              <button class="btn btn-sm range-btn" onclick="setGrafRango(90,this)" style="background:transparent;color:var(--text2);border:none">90d</button>
+              <button class="btn btn-sm range-btn" onclick="setGrafRango(0,this)" style="background:transparent;color:var(--text2);border:none">Todo</button>
+              <button class="btn btn-sm range-btn" onclick="setGrafRango(-1,this)" style="background:transparent;color:var(--text2);border:none">Semanal</button>
+            </div>
+            <div id="mode-btns" style="display:flex;gap:4px;background:var(--surface2);padding:4px;border-radius:8px">
+              <button class="btn btn-sm" onclick="setGrafMode('pct',this)" style="background:var(--accent);color:white;border:none">%</button>
+              <button class="btn btn-sm" onclick="setGrafMode('kg',this)" style="background:transparent;color:var(--text2);border:none">kg</button>
             </div>
           </div>
         </div>
         <div class="chart-legend" id="legend-detalle">
-          <div class="legend-item"><div class="legend-line" style="background:#2563eb"></div><span>Peso</span></div>
-          <div class="legend-item"><div class="legend-line" style="background:#dc2626"></div><span>% Grasa</span></div>
-          <div class="legend-item"><div class="legend-line" style="background:#059669"></div><span>% Músculo</span></div>
+          <div class="legend-item"><div class="legend-line" style="background:#2563eb"></div><span>Peso (kg)</span></div>
+          <div class="legend-item"><div class="legend-line" style="background:#dc2626"></div><span id="legend-grasa-label">% Grasa</span></div>
+          <div class="legend-item"><div class="legend-line" style="background:#059669"></div><span id="legend-musculo-label">% Músculo</span></div>
           <div class="legend-item"><div class="legend-line" style="background:#7c3aed"></div><span>📌 Proyecto</span></div>
           <div class="legend-item"><div class="legend-dashed" style="border-color:#d97706"></div><span>⚡ Espontáneo</span></div>
           <div class="legend-item"><div class="legend-dashed" style="border-color:#94a3b8"></div><span>🏆 Hito</span></div>
@@ -679,7 +790,7 @@ async function loadGraficas(){
     if(chart1){chart1.destroy();chart1=null;}
     if(chart1candle){chart1candle.destroy();chart1candle=null;}
 
-    renderG1Detalle(7);
+    renderG1Detalle(grafRango);
     renderG1Candle();
   }catch(e){el.innerHTML=`<div class="alert alert-error">⚠️ Error: ${e.message}</div>`;}
 }
@@ -689,6 +800,7 @@ function switchVista(vista){
   const wrap1=document.getElementById('chart1').parentElement;
   const wrapC=document.getElementById('chart1candle').parentElement;
   const rangeBtns=document.getElementById('range-btns');
+  const modeBtns=document.getElementById('mode-btns');
   const legD=document.getElementById('legend-detalle');
   const legC=document.getElementById('legend-candle');
   document.getElementById('btn-detalle').style.cssText=vista==='detalle'?'background:var(--accent);color:white;border:none':'background:transparent;color:var(--text2);border:none';
@@ -696,14 +808,27 @@ function switchVista(vista){
   wrap1.style.display=vista==='detalle'?'block':'none';
   wrapC.style.display=vista==='candle'?'block':'none';
   rangeBtns.style.display=vista==='detalle'?'flex':'none';
+  modeBtns.style.display=vista==='detalle'?'flex':'none';
   legD.style.display=vista==='detalle'?'flex':'none';
   legC.style.display=vista==='candle'?'flex':'none';
 }
 
-function setRango(dias,el){
-  document.querySelectorAll('.range-btn').forEach(b=>{b.style.background='';b.style.color='';b.classList.remove('active');});
-  el.style.background='var(--accent)';el.style.color='white';el.classList.add('active');
-  renderG1Detalle(dias);
+function setGrafRango(r,el){
+  grafRango=r;
+  document.querySelectorAll('.range-btn').forEach(b=>{b.style.background='transparent';b.style.color='var(--text2)';});
+  el.style.background='var(--accent)';el.style.color='white';
+  renderG1Detalle(r);
+}
+
+function setGrafMode(m,el){
+  grafMode=m;
+  document.querySelectorAll('#mode-btns .btn').forEach(b=>{b.style.background='transparent';b.style.color='var(--text2)';});
+  el.style.background='var(--accent)';el.style.color='white';
+  const gl=document.getElementById('legend-grasa-label');
+  const ml=document.getElementById('legend-musculo-label');
+  if(gl)gl.textContent=m==='pct'?'% Grasa':'Grasa (kg)';
+  if(ml)ml.textContent=m==='pct'?'% Músculo':'Músculo (kg)';
+  renderG1Detalle(grafRango);
 }
 
 function buildAnnotations(labels,evRows,hRows){
@@ -725,34 +850,77 @@ function buildAnnotations(labels,evRows,hRows){
   return ann;
 }
 
-function renderG1Detalle(dias){
+function renderG1Detalle(rango){
   if(chart1){chart1.destroy();chart1=null;}
+
   let rows=_bRows;
-  if(dias>0){
-    const cutoff=new Date();cutoff.setDate(cutoff.getDate()-dias);
+
+  // Vista semanal: solo filas con composición completa (lunes), mostrar 5 semanas
+  if(rango===-1){
+    const compRows=_bRows.filter(r=>r[3]&&r[3]!=='');
+    // Take last 5, pad with empty future slots if less than 5
+    rows=compRows.slice(-5);
+    // Build labels: last 5 mondays available, fill remaining with future dates
+    if(rows.length<5){
+      const lastDate=rows.length?parseDate(rows[rows.length-1][0]):new Date();
+      const needed=5-rows.length;
+      for(let i=1;i<=needed;i++){
+        const d=new Date(lastDate);d.setDate(d.getDate()+7*i);
+        const dd=String(d.getDate()).padStart(2,'0');
+        const mm=String(d.getMonth()+1).padStart(2,'0');
+        const yy=d.getFullYear();
+        rows.push([`${dd}/${mm}/${yy}`,null,null,null,null]);
+      }
+    }
+  } else if(rango>0){
+    const cutoff=new Date();cutoff.setDate(cutoff.getDate()-rango);
     rows=_bRows.filter(r=>{const d=parseDate(r[0]);return d&&d>=cutoff;});
   }
   if(!rows.length)rows=_bRows;
+
   const labels=rows.map(r=>r[0]||'');
   const pesoData=rows.map(r=>r[1]?parseFloat(r[1]):null);
-  const grasaData=rows.map(r=>r[3]?parseFloat(r[3]):null);
-  const musculoData=rows.map(r=>r[4]?parseFloat(r[4]):null);
+
+  // Grasa y músculo — solo puntos donde hay dato, conectados
+  const grasaData=rows.map(r=>{
+    if(!r[3])return null;
+    if(grafMode==='kg')return parseFloat((parseFloat(r[3])/100*parseFloat(r[1]||0)).toFixed(1));
+    return parseFloat(r[3]);
+  });
+  const musculoData=rows.map(r=>{
+    if(!r[4])return null;
+    if(grafMode==='kg')return parseFloat((parseFloat(r[4])/100*parseFloat(r[1]||0)).toFixed(1));
+    return parseFloat(r[4]);
+  });
+
+  const compUnit=grafMode==='pct'?'(%)':'(kg)';
+  const compTitle=`Composición ${compUnit}`;
   const ann=buildAnnotations(labels,_evRows,_hRows);
   const ctx=document.getElementById('chart1').getContext('2d');
+
   chart1=new Chart(ctx,{type:'line',data:{labels,datasets:[
-    {label:'Peso (kg)',data:pesoData,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,0.06)',borderWidth:2.5,pointRadius:3,pointBackgroundColor:'#2563eb',tension:0.3,yAxisID:'y',spanGaps:true,fill:true},
-    {label:'% Grasa',data:grasaData,borderColor:'#dc2626',backgroundColor:'transparent',borderWidth:2,pointRadius:(c)=>grasaData[c.dataIndex]!==null?5:0,pointBackgroundColor:'#dc2626',tension:0.3,yAxisID:'y2',spanGaps:false},
-    {label:'% Músculo',data:musculoData,borderColor:'#059669',backgroundColor:'transparent',borderWidth:2,pointRadius:(c)=>musculoData[c.dataIndex]!==null?5:0,pointBackgroundColor:'#059669',tension:0.3,yAxisID:'y2',spanGaps:false}
+    {label:'Peso (kg)',data:pesoData,borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,0.06)',borderWidth:2.5,pointRadius:4,pointBackgroundColor:'#2563eb',pointBorderColor:'white',pointBorderWidth:2,tension:0.3,yAxisID:'y',spanGaps:true,fill:true},
+    {label:'Grasa '+compUnit,data:grasaData,borderColor:'#dc2626',backgroundColor:'transparent',borderWidth:2,
+      pointRadius:(c)=>grasaData[c.dataIndex]!==null?6:0,
+      pointBackgroundColor:'#dc2626',pointBorderColor:'white',pointBorderWidth:2,
+      tension:0.3,yAxisID:'y2',spanGaps:false},
+    {label:'Músculo '+compUnit,data:musculoData,borderColor:'#059669',backgroundColor:'transparent',borderWidth:2,
+      pointRadius:(c)=>musculoData[c.dataIndex]!==null?6:0,
+      pointBackgroundColor:'#059669',pointBorderColor:'white',pointBorderWidth:2,
+      tension:0.3,yAxisID:'y2',spanGaps:false}
   ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-    plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>{
-      if(c.dataset.label==='% Grasa'&&grasaData[c.dataIndex]===null)return null;
-      if(c.dataset.label==='% Músculo'&&musculoData[c.dataIndex]===null)return null;
-      return c.dataset.label+': '+c.formattedValue+(c.dataset.yAxisID==='y2'?'%':' kg');
-    }}},annotation:{annotations:ann}},
+    plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:(c)=>{
+        if(c.dataset.label.includes('Grasa')&&grasaData[c.dataIndex]===null)return null;
+        if(c.dataset.label.includes('Músculo')&&musculoData[c.dataIndex]===null)return null;
+        const unit=c.dataset.yAxisID==='y2'?(grafMode==='pct'?'%':' kg'):' kg';
+        return c.dataset.label+': '+c.formattedValue+unit;
+      }}},
+      annotation:{annotations:ann}},
     scales:{
       x:{grid:{color:'#f0f2f6'},ticks:{font:{family:'DM Mono',size:10},color:'#94a3b8',maxRotation:45,maxTicksLimit:14}},
       y:{position:'left',title:{display:true,text:'Peso (kg)',font:{family:'DM Mono',size:10}},grid:{color:'#f0f2f6'},ticks:{font:{family:'DM Mono',size:10},color:'#2563eb'}},
-      y2:{position:'right',title:{display:true,text:'Composición (%)',font:{family:'DM Mono',size:10}},grid:{display:false},ticks:{font:{family:'DM Mono',size:10},color:'#94a3b8'}}
+      y2:{position:'right',title:{display:true,text:compTitle,font:{family:'DM Mono',size:10}},grid:{display:false},ticks:{font:{family:'DM Mono',size:10},color:'#94a3b8'}}
     }}});
 }
 
@@ -853,13 +1021,22 @@ async function loadComparativas(){
   if(rows.length<2){el.innerHTML='<div class="card"><p style="color:var(--muted);font-size:13px">Se necesitan al menos 2 registros.</p></div>';return;}
   const byMonth={};
   rows.forEach(r=>{if(!r[0])return;const p=r[0].split('/');const key=p.length===3?`${p[1]}/${p[2]}`:r[0].substring(0,7);if(!byMonth[key])byMonth[key]=[];byMonth[key].push(r);});
+  const mode=dashMode;
+  const gH=mode==='pct'?'GRASA INICIO':'GRASA INICIO (kg)';
+  const gFH=mode==='pct'?'GRASA FIN':'GRASA FIN (kg)';
+  const dgH=mode==='pct'?'DIF. GRASA':'DIF. GRASA (kg)';
   el.innerHTML=`<div class="card"><div class="card-title">Comparativa mensual</div><div class="table-wrap"><table>
-    <tr><th>MES</th><th>PESO INICIO</th><th>PESO FIN</th><th>DIFERENCIA</th><th>GRASA INICIO</th><th>GRASA FIN</th><th>DIF. GRASA</th></tr>
+    <tr><th>MES</th><th>PESO INICIO</th><th>PESO FIN</th><th>DIFERENCIA</th><th>${gH}</th><th>${gFH}</th><th>${dgH}</th></tr>
     ${Object.entries(byMonth).map(([mes,items])=>{
       const ini=items[0],fin=items[items.length-1];
       const dp=(parseFloat(fin[1]||0)-parseFloat(ini[1]||0)).toFixed(1);
-      const dg=(parseFloat(fin[3]||0)-parseFloat(ini[3]||0)).toFixed(1);
-      return `<tr><td><strong>${mes}</strong></td><td>${ini[1]||'—'} kg</td><td>${fin[1]||'—'} kg</td><td style="color:${parseFloat(dp)<=0?'var(--accent2)':'var(--danger)'};font-weight:700">${parseFloat(dp)>0?'+':''}${dp} kg</td><td>${ini[3]||'—'}%</td><td>${fin[3]||'—'}%</td><td style="color:${parseFloat(dg)<=0?'var(--accent2)':'var(--danger)'}">${parseFloat(dg)>0?'+':''}${dg}%</td></tr>`;
+      const gIniPct=parseFloat(ini[3]||0),gFinPct=parseFloat(fin[3]||0);
+      const pIni=parseFloat(ini[1]||0),pFin=parseFloat(fin[1]||0);
+      let gIni,gFin,dg;
+      if(mode==='pct'){gIni=ini[3]?gIniPct+'%':'—';gFin=fin[3]?gFinPct+'%':'—';dg=ini[3]&&fin[3]?(gFinPct-gIniPct).toFixed(1)+'%':'—';}
+      else{gIni=ini[3]&&pIni?(gIniPct/100*pIni).toFixed(1)+' kg':'—';gFin=fin[3]&&pFin?(gFinPct/100*pFin).toFixed(1)+' kg':'—';dg=ini[3]&&fin[3]?((gFinPct/100*pFin)-(gIniPct/100*pIni)).toFixed(1)+' kg':'—';}
+      const dgNum=parseFloat(dg);
+      return `<tr><td><strong>${mes}</strong></td><td>${ini[1]||'—'} kg</td><td>${fin[1]||'—'} kg</td><td style="color:${parseFloat(dp)<=0?'var(--accent2)':'var(--danger)'};font-weight:700">${parseFloat(dp)>0?'+':''}${dp} kg</td><td>${gIni}</td><td>${gFin}</td><td style="color:${dgNum<=0?'var(--accent2)':'var(--danger)'}">${parseFloat(dg)>0?'+':''}${dg}</td></tr>`;
     }).join('')}
   </table></div></div>`;
 }
@@ -868,7 +1045,25 @@ window.addEventListener('load',()=>{
   const today=new Date().toISOString().split('T')[0];
   ['pd-fecha','cc-fecha','ev-fecha'].forEach(id=>document.getElementById(id).value=today);
   loadDashboard();
+
+  // Mobile sidebar swipe
+  let touchStartX=0;
+  document.addEventListener('touchstart',e=>{touchStartX=e.touches[0].clientX;},{passive:true});
+  document.addEventListener('touchend',e=>{
+    const dx=e.changedTouches[0].clientX-touchStartX;
+    if(touchStartX<30&&dx>60)openSidebar();
+    else if(dx<-60)closeSidebar();
+  },{passive:true});
 });
+
+function openSidebar(){
+  document.querySelector('.sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('visible');
+}
+function closeSidebar(){
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('visible');
+}
 </script>
 </body>
 </html>
